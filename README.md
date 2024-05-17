@@ -90,4 +90,5 @@ Translation support
 
 Available plugins:
 
-+ [QuizShopReward]() - A module that adds a reward in the form of credits for taking a quiz
++ [QuizShopReward](https://github.com/Stimayk/QuizShopReward) - A module that adds a reward in the form of credits for taking a quiz
++ [QuizHPReward](https://github.com/Stimayk/QuizHPReward) - A module that adds a reward in the form of HP for taking a quiz
