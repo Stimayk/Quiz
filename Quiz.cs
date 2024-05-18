@@ -1,7 +1,8 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Capabilities;
 using CounterStrikeSharp.API.Modules.Commands;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using QuizApi;
 
@@ -11,7 +12,7 @@ namespace Quiz
     {
         public override string ModuleName => "Quiz";
         public override string ModuleAuthor => "E!N";
-        public override string ModuleVersion => "v1.0";
+        public override string ModuleVersion => "v1.1";
 
         private readonly PluginCapability<IQuizApi> _pluginCapability = new("quiz:core");
 
@@ -61,7 +62,7 @@ namespace Quiz
             return;
         }
 
-        private static void QuestionCfg()
+        private void QuestionCfg()
         {
             Config.LoadQuestions();
             string configFilePath = Config.GetQuestionConfigFilePath();
@@ -76,21 +77,21 @@ namespace Quiz
                     if (questionsConfig != null)
                     {
                         _cfg.Questions = questionsConfig;
-                        Console.WriteLine($"[Quiz] Loaded {questionsConfig.Count} questions.");
+                        Logger.LogInformation($"Loaded {questionsConfig.Count} questions.");
                     }
                     else
                     {
-                        Console.WriteLine("[Quiz] No questions found in the configuration file.");
+                        Logger.LogError("No questions found in the configuration file.");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Quiz] Error reading questions configuration: {ex.Message}");
+                    Logger.LogError($"Error reading questions configuration: {ex.Message}");
                 }
             }
             else
             {
-                Console.WriteLine($"[Quiz] Questions configuration file not found ({configFilePath}).");
+                Logger.LogError($"Questions configuration file not found ({configFilePath}).");
             }
         }
 
@@ -109,12 +110,12 @@ namespace Quiz
             return _cfg.Questions.Count;
         }
 
-        private static Question? GetRandomQuestion()
+        private Question? GetRandomQuestion()
         {
             int maxQuestions = GetMaxQuestion();
             if (maxQuestions == 0)
             {
-                Console.WriteLine("[Quiz] No questions available.");
+                Logger.LogError("No questions available.");
                 return null;
             }
 
@@ -164,7 +165,7 @@ namespace Quiz
                         BroadcastMessage($"{Localizer["LuckNextTime", ChatPrefix]}");
                     }
                 }
-
+                _api?.StopQuiz();
                 ResetQuizForNextRound();
             }
         }
@@ -196,6 +197,7 @@ namespace Quiz
             {
                 var actionToExecute = possibleActions[new Random().Next(possibleActions.Count)];
                 actionToExecute();
+                _api?.StartQuiz(possibleActions.Count);
             }
         }
 
@@ -224,43 +226,91 @@ namespace Quiz
 
         private void GenerateExample()
         {
+            (int a, int b) = GetRandomNumbers(1, 101);
+
+            while (a == 0 || b == 0)
+            {
+                (a, b) = GetRandomNumbers(1, 101);
+            }
+
+            (int result, string example) = PerformOperation(a, b);
+
+            CurrentAnswer = result.ToString();
+
+            if (ChatPrefix != null && _cfg?.AnswerTag != null)
+            {
+                string mathMessage = Localizer["Math", ChatPrefix, example];
+                string exampleMessage = Localizer["Example", ChatPrefix, _cfg.AnswerTag];
+
+                BroadcastMessage(mathMessage);
+                BroadcastMessage(exampleMessage);
+            }
+        }
+
+        private (int, int) GetRandomNumbers(int min, int max)
+        {
             Random random = new();
-            int a = random.Next(1, 101);
-            int b = random.Next(1, 101);
+            int a = random.Next(min, max + 1);
+            int b = random.Next(min, max + 1);
+
+            while (a == 0 || b == 0)
+            {
+                a = random.Next(min, max + 1);
+                b = random.Next(min, max + 1);
+            }
+
+            return (a, b);
+        }
+
+        private static (int, string) PerformOperation(int a, int b)
+        {
+            int operationType = GetRandomOperation(4);
             int result;
-            string operation;
-            int operationType = random.Next(1, 5);
+            string example;
 
             switch (operationType)
             {
                 case 1:
                     result = a + b;
-                    operation = "+";
+                    example = $"{a} + {b}";
                     break;
                 case 2:
+                    while (a < b)
+                    {
+                        a = GetRandomNumber(1, b);
+                    }
                     result = a - b;
-                    operation = "-";
+                    example = $"{a} - {b}";
                     break;
                 case 3:
                     result = a * b;
-                    operation = "*";
+                    example = $"{a} * {b}";
                     break;
                 case 4:
-                    b = random.Next(1, 101);
-                    a = b * random.Next(1, 10);
+                    while (b == 0 || a % b != 0)
+                    {
+                        b = GetRandomNumber(1, 100);
+                    }
                     result = a / b;
-                    operation = "/";
+                    example = $"{a} / {b}";
                     break;
                 default:
-                    throw new InvalidOperationException("Unknown operation");
+                    throw new InvalidOperationException("Unknown operation type encountered in GenerateExample.");
             }
 
-            CurrentAnswer = result.ToString();
-            if (ChatPrefix != null && _cfg.AnswerTag != null)
-            {
-                BroadcastMessage($"{Localizer["Math", ChatPrefix, a, b, operation]}");
-                BroadcastMessage($"{Localizer["Example", ChatPrefix, _cfg.AnswerTag]}");
-            }
+            return (result, example);
+        }
+
+        private static int GetRandomOperation(int max)
+        {
+            Random random = new();
+            return random.Next(1, max + 1);
+        }
+
+        private static int GetRandomNumber(int min, int max)
+        {
+            Random random = new();
+            return random.Next(min, max + 1);
         }
 
         public void NextQuiz()
@@ -356,11 +406,11 @@ namespace Quiz
 
                 if (_core == 0)
                 {
-                    Console.WriteLine($"{_api.GetTranslatedText("SystemName")} | module not found. Core is waiting for a module");
+                    Logger.LogInformation("Module not found. Core is waiting for a module");
                 }
                 else
                 {
-                    Console.WriteLine($"{_api.GetTranslatedText("SystemName")} | Quiz module successfully detected, core fully active.");
+                    Logger.LogInformation("Quiz module successfully detected, core fully active.");
                 }
             }
         }
@@ -410,6 +460,11 @@ namespace Quiz
                 OnQuizStart?.Invoke();
             }
 
+            public void StopQuiz()
+            {
+                OnQuizEnd?.Invoke();
+            }
+
             public int GetQuizValue() => quizValue;
 
             public string GetAnswer() => currentAnswer;
@@ -421,6 +476,13 @@ namespace Quiz
                 OnPlayerWin?.Invoke(player);
             }
 
+            public void TriggerPlayerLose(CCSPlayerController player)
+            {
+                OnPlayerLose?.Invoke(player);
+            }
+
+            public void TriggerStartQuiz() { }
+
             public void HandleClientAnswer(CCSPlayerController player, string answer)
             {
                 OnClientAnswered?.Invoke(player);
@@ -430,7 +492,7 @@ namespace Quiz
                 }
                 else
                 {
-                    OnPlayerLose?.Invoke(player);
+                    TriggerPlayerLose(player);
                 }
             }
 
