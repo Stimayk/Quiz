@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Capabilities;
 
 namespace QuizApi
@@ -9,10 +9,13 @@ namespace QuizApi
         void RegisterModule(Action<CCSPlayerController, CCSPlayerController, string> action);
         bool HasRegisteredModules();
         void StartQuiz(int quizMode);
+        void StopQuiz();
         int GetQuizValue();
         string GetAnswer();
         void SetAnswer(string answer);
         void TriggerPlayerWin(CCSPlayerController player);
+        void TriggerPlayerLose(CCSPlayerController player);
+        void TriggerStartQuiz();
         void HandleClientAnswer(CCSPlayerController player, string answer);
         string GetTranslatedText(string name, params object[] args);
 
